@@ -1,3 +1,5 @@
+package sample;
+
 import java.util.Scanner;
 import java.io.*;
 import java.util.List;
@@ -6,24 +8,45 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 
+/**
+ * <h1>Read data file, create histogram, calculate probability</h1>
+ * The Main program reads file with wind value data, creates histogram,
+ * calculates OLS, and calculates probability using cumulative probability
+ * distribution.
+ * <p>
+ * @author  Masha Volkova
+ * @version 1.0
+ * @since  05/10/21
+ */
+
 public class Main {
+    /**
+     * This is the main method.
+     * @param args Unused.
+     * @return Nothing.
+     * @exception IOException On input error.
+     * @exception FileNotFoundException On invalid Filename.
+     */
 
     public static void main(String args[]) {
+
+        //Array for wind values initialized
         Float[] windValues = new Float[9000];
+        //Histogram with bins initialized
         Bin[] histogram = new Bin[200];
-        int maxSpeedSqr = 1000;
-        //Bin[] histogram;
+        //Scanner initialized
         Scanner scanner = new Scanner(System.in);
 
+        //Variables initialized
         boolean validFilename = false;
         String filenameInput;
 
-        //While loop checks if valid filename is entered by user
+        // While loop checks if valid filename is entered by user
         while (!validFilename) {
 
             try {
-                //System.out.println("Enter filename: ");
-                //filenameInput = scanner.next();
+                System.out.println("Enter filename: ");
+                filenameInput = scanner.next();
                 File file = new File("Augspurger_2018_03.csv");
 
                 if (file.exists()) {
@@ -42,7 +65,7 @@ public class Main {
         String intervalInput;
         int userDefinedInterval = 0;
 
-        //While loop checks if valid interval is entered by user
+        //While loop checks if valid interval is entered by user (must be between 50 and 100)
         while (!validDimensions) {
             try {
                 System.out.println("Enter integer between 50 and 100 for the number of intervals: ");
@@ -59,30 +82,19 @@ public class Main {
             }
         }
 
-        // int numBins = maxSpeedSqr/ userDefinedInterval +1;
-        //int numBins = 200;
-
-        //System.out.println("numBins: " + numBins);
-
-        ///histogram = new Bin[numBins];
-
+        //Histogram created by defining Bin constructor with interval, count, and cumulative probability
         for (int i = 0; i < 200; i++) {
-            // define a Bin constructor to set the end point of the
-            // interval spanned by each bin, the count of wind speeds in
-            // that interval, and the cumulative probability (to be computed)
             histogram[i] = new Bin(i * userDefinedInterval, 0, 0);
         }
 
-
-
-
+        //Variables initialized
         BufferedReader br = null;
         String strLine = "";
         String[] inLine = new String[9];
         int count = 0;
 
-        // Read in file, get wind values
-
+        //Reads file to get wind values
+        //Adds wind values to array
         try {
             br = new BufferedReader(new FileReader("Augspurger_2018_03.csv"));
             for (int i = 0; i < 8; i++) {
@@ -91,7 +103,6 @@ public class Main {
             while ((strLine = br.readLine()) != null) {
                 inLine = strLine.split(",");
                 windValues[count] = Float.parseFloat(inLine[5]);
-                //System.out.println(inLine[5]);
                 count ++;
             }
             br.close();
@@ -101,10 +112,10 @@ public class Main {
             System.err.println("Cannot convert value in line: " + inLine[7] + "to Float value");
         }
 
-        //Normalize counts (step 3)
+        //Makes histogram by iterating through the wind values array
+        //Increments count in corresponding bin
         for (int i = 0; i < windValues.length; i++) {
             for (int j = 0; j < 200; j++) {
-                // Note, you should square the wind values before comparing them
                 if (windValues[i] != null){
                     if ((Math.pow(windValues[i], 2.0) >= histogram[j].interval)&&((Math.pow(windValues[i], 2.0)) < (histogram[j + 1].interval))){
                         histogram[j].count += 1;
@@ -112,8 +123,10 @@ public class Main {
                     }
                 }
             }
-
         }
+
+        //Normalize counts in bins to cumulative probabilities
+        //If probabilities negative, stops conversion
         double cumulativeProb = 1.0;
         for (int i = 0; i < 200; i++) {
             cumulativeProb = cumulativeProb - (float) histogram[i].count/ (float) windValues.length;
@@ -124,9 +137,9 @@ public class Main {
             histogram[i].cumProbability = (float)cumulativeProb;
         }
 
-
-
-        //Ordinary Least Squares (step 4)
+         //OLS calculated
+         //Used to find K value (sum of log of the cumulative probabilities divided by sum of the cumulative interval length)
+         //Exclude sparse data (<= 0.01)
         Float num = 0.0f;
         Float den = 0.0f;
         for (int j = 0; j < 200; j++) {
@@ -137,13 +150,13 @@ public class Main {
         }
         Float K = num / den;
 
+        // Write userDefinedInterval and K value in the first line of cumProbability.txt file
+        // Write bin intervals and cumulative probabilities to cumProbability.txt file
         PrintWriter printWriter = null;
         try {
             printWriter = new PrintWriter(new File("cumProbability.txt"));
             printWriter.println(userDefinedInterval + " " + K);
             for (int i = 0; i < 200; i++){
-                //Write out j and histogram[j].cumProbabilty to the file to cumProbablity.txt
-                //printWriter.println(i + " " + (Float.valueOf(histogram[i].cumProbability)));
                 printWriter.println(histogram[i].interval + " " + (Float.valueOf(histogram[i].cumProbability)));
             }
             printWriter.close();
@@ -152,14 +165,16 @@ public class Main {
             System.out.println("File not found.");
         }
 
-
+        //Variable initialized
         boolean continueLoop = true;
 
+       //While loop continues until userInput is not 'q' (quit)
         while (continueLoop){
             String userInput = "";
-
             System.out.println("Enter ‘less’, ‘greaterEq’, or ‘q’ to quit: ");
             boolean validInput = false;
+
+            //While loop checks for valid input ('less, ‘greaterEq’, or ‘q’)
             while (!validInput){
                 userInput = scanner.next();
                 if (userInput.equals("less") || userInput.equals("greaterEq") || userInput.equals("q")){
@@ -171,27 +186,36 @@ public class Main {
 
             }
 
-            float windSpeed = 0;
-            System.out.println("Enter windspeed: ");
-            boolean validSpeed = false;
-            while (!validSpeed){
-                try{
-                    windSpeed = scanner.nextFloat();
-                    if (windSpeed >= 0.0){
-                        validSpeed = true;
-                    }
-                    else{
-                        System.out.println("Invalid input. Please enter wind speed as positive number");
-                    }
-                }
-                catch (Exception e){
-                    System.out.println("Invalid input. Please enter wind speed as float (0.0)");
-                }
+            //If statement ends while loop if user input is 'q'
 
-
+            if (userInput.equals("q")){
+                continueLoop = false;
+                System.exit(0);
             }
 
+            String windSpeedInput = "";
+            Float windSpeed = (float)0;
+            System.out.println("Enter windspeed: ");
+            boolean validSpeed = false;
 
+            //While loop checks for valid speed (greater than or equal to 0.0)
+            while (!validSpeed) {
+                try {
+
+                    windSpeedInput = scanner.next();
+                    windSpeed = Float.parseFloat(windSpeedInput);
+                    if (windSpeed >= 0.0) {
+                        validSpeed = true;
+                    } else {
+                        System.out.println("Invalid input. Please enter wind speed as positive number");
+                    }
+
+                } catch (Exception e) {
+                    System.out.println("Invalid input. Please enter wind speed as float (0.0)");
+                }
+            }
+
+            //Probability calculated based on user input (less/greaterEq and wind speed)
             if (userInput.equals("less")){
                 Float prob = (float)(1.0 - Math.exp(-K * Math.pow(windSpeed, 2)));
                 System.out.println("Probability wind speed < " + windSpeed + " is " + prob);
@@ -200,10 +224,6 @@ public class Main {
                 Float prob = (float)(Math.exp(-K * Math.pow(windSpeed, 2)));
                 System.out.println("Probability wind speed >= " + windSpeed + " is " + prob);
             }
-            else{
-                continueLoop = false;
-            }
-
 
         }
     }
