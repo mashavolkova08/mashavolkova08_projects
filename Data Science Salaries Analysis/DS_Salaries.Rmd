@@ -1,0 +1,219 @@
+---
+title: "Data Science Salaries Project"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-04-17"
+author: "Aditi Patil and Masha Volkova"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Aditi Patil and Masha Volkova 
+
+```{r}
+ds.salaries <- read.csv(file = 'ds_salaries.csv')
+str(ds.salaries)
+```
+
+## Preprocessing and Exploratory Analysis
+Since `salaries` is in different currencies we can drop it for in favor of `salary_in_usd`. Furthermore we can also drop variables like `X`, `company_location`, `employee_residence`, and `salary_currency`
+```{r}
+cols = c("work_year","experience_level","employment_type","salary_in_usd")
+ds.salaries = subset(ds.salaries,select=cols)
+
+# Treat the char variables as factors
+ds.salaries$work_year = as.factor(ds.salaries$work_year)
+ds.salaries$experience_level = as.factor(ds.salaries$experience_level)
+ds.salaries$employment_type = as.factor(ds.salaries$employment_type)
+
+# View the final data
+str(ds.salaries)
+```
+
+```{r, fig.height = 4, fig.width = 8}
+boxplot(ds.salaries$salary_in_usd, ylab="Salary in USD", main="Distribution of all salaries")
+boxplot(salary_in_usd~employment_type, data=ds.salaries, xlab="Employment Type", ylab="Salary in USD", main="Salary by Employment Type")
+boxplot(salary_in_usd~experience_level, data=ds.salaries, xlab="Experience Level", ylab="Salary in USD", main="Salary by Experience Level")
+boxplot(salary_in_usd~work_year,data=ds.salaries, xlab="Work Year", ylab="Salary in USD", main="Salary by Work Year")
+```
+ 
+```{r}
+library(lattice)
+interaction.plot(ds.salaries$experience_level,ds.salaries$employment_type,ds.salaries$salary_in_usd, ylab ="Salary in USD", xlab="Experience Level", trace.label ="Employment Type")
+interaction.plot(ds.salaries$employment_type,ds.salaries$work_year,ds.salaries$salary_in_usd, ylab ="Salary in USD", xlab="Employment Type", trace.label ="Work Year")
+interaction.plot(ds.salaries$experience_level,ds.salaries$work_year,ds.salaries$salary_in_usd, ylab ="Salary in USD", xlab="Experience Level", trace.label ="Work Year")
+```
+
+
+## ANOVA Assumptions
+```{r}
+lm.salaries = lm(salary_in_usd~ work_year + experience_level + employment_type, data = ds.salaries)
+
+lm.log.salaries = lm(log(salary_in_usd)~ work_year + experience_level + employment_type, data = ds.salaries)
+
+lm.sqrt.salaries = lm(sqrt(salary_in_usd)~ work_year + experience_level + employment_type, data = ds.salaries)
+
+plot(lm.salaries,which=c(1,2))
+plot(lm.log.salaries,which=c(1,2))
+plot(lm.sqrt.salaries,which=c(1,2))
+
+```
+We can see that the outliers decrease from 253 to 186 in the QQ plot for the log transformation. They further decrease to 158 in the square root transformation. The resdiual plot's red line curves toward the bottom in the regular model. This line gets closer to the 0 line in the square root function.
+
+```{r}
+library(MASS)
+boxcox(lm.salaries,lambda = seq(-2,2,length=100)) # before transformation
+boxcox(lm.log.salaries,lambda = seq(-2,2,length=100)) # after SQRT transformation
+boxcox(lm.sqrt.salaries,lambda = seq(-2,2,length=100)) # after SQRT transformation
+```
+Looking at the box-cox transformation diagrams the confidence intervals for lambda is below 1 for the regular model. When we do a square root transformation this gets closer to 1. The log transformation offsets it to much larger than 1. 
+
+With all the given points we can see that the square root transformation is appropriate as it has the least amount of outliers in the QQ plot, the residual plot has a much better equal variance, and the box-cox transformation's lambda value is closer to 1 compared to the other transformations (or no transformation).
+
+## Fixed effect model
+```{r}
+library(car)
+model.1 = lm(sqrt(salary_in_usd) ~work_year+ experience_level+employment_type,data=ds.salaries)
+fixed.1 = aov(model.1)
+summary(fixed.1)
+```
+```{r}
+model.2 = lm(sqrt(salary_in_usd) ~work_year*experience_level*employment_type,data=ds.salaries)
+fixed.2 = aov(model.2)
+summary(fixed.2)
+```
+Since the highest level interaction term was not significant we can drop it and consider the two way interactions
+```{r}
+model.3 = lm(sqrt(salary_in_usd) ~work_year+experience_level+employment_type +
+                     work_year:experience_level + work_year:employment_type + 
+                     experience_level:employment_type,data=ds.salaries)
+fixed.3 = aov(model.3)
+summary(fixed.3)
+```
+We can compare models `fixed.1` and `fixed.3` where `fixed.1` is the null model and `fixed.3` is the alternative model
+```{r}
+anova(model.1,model.3)
+```
+Since the p-value of 0.2546 is greater than significance level of 0.05, we fail to reject the null model `model.1` in favor of the alternative model `model.3`. In this case the interaction effect is not significant, so we will consider `model.1` as the final fixed effects model.
+
+### Assumptions
+```{r}
+plot(fixed.1$residuals ~ fixed.1$fitted.values, xlab="Fitted Values", ylab="Residuals", main="Residual Plot for Fixed Model")
+abline(h=0,col="red")
+```
+```{r}
+residuals = resid(fixed.1)
+qqnorm(residuals,main="Residual Plot for Fixed Model")
+qqline(residuals(fixed.1))
+par(mfrow=c(1,2))
+```
+
+
+## Mixed Effects
+Since we picked the model without interactions, we will now consider if `work_year` can be treated as a random effect. The study only pulled data from `2020`,`2021`,and `2022` so we can say that the levels represent a random sample from all the years.
+```{r}
+library(lme4)
+mixed.1 = lmer(sqrt(salary_in_usd) ~experience_level+employment_type+ (1|work_year), data =ds.salaries)
+summary(mixed.1)
+```
+#Assumptions
+```{r}
+#Random effect - work year normality
+
+random.work.year.1 = ranef(mixed.1)$work_year[["(Intercept)"]]
+
+qqnorm(random.work.year.1, main="Work Year")
+qqline(random.work.year.1)
+
+```
+Variance component of work_year: 101.7
+Variance component of residuals: 7578.9
+
+Compute the ICC (Intraclass Correlation):
+$$ ICC = \frac{\sigma_\alpha^2}{\sigma_\alpha^2 + \sigma^2} $$
+$$ICC = \frac{101.7}{101.7 + 7578.9} = 0.01324115$$
+Determine the percentage of variation attributed to the random component.
+Percentage of variation attributed to random component= ICC x 100
+
+0.01324115 x 100 = 1.324%
+
+```{r}
+mixed.2 = lmer(sqrt(salary_in_usd) ~experience_level*employment_type+ (1|work_year), data =ds.salaries)
+summary(mixed.2)
+```
+
+#Assumptions
+```{r}
+#Random effect - work year normality
+
+random.work.year.2 = ranef(mixed.2)$work_year[["(Intercept)"]]
+
+qqnorm(random.work.year.2, main="Work Year")
+qqline(random.work.year.2)
+
+```
+Variance component of work_year: 112.7
+Variance component of residuals: 7518.4
+
+Compute the ICC (Intraclass Correlation):
+$$ ICC = \frac{\sigma_\alpha^2}{\sigma_\alpha^2 + \sigma^2} $$
+$$ICC = \frac{112.7}{112.7 + 7518.4} = 0.01476851$$
+Determine the percentage of variation attributed to the random component:
+Percentage of variation attributed to random component= ICC x 100
+
+0.01476851 x 100 = 1.477%
+
+
+```{r}
+anova(mixed.1,mixed.2)
+```
+Since the p-value of 0.08407 is greater than significance level of 0.05, we fail to reject the null model `mixed.1` in favor of the alternative model `mixed.3`. In this case the interaction effect is not significant at the 0.05 significance level, so we will consider `mixed.1` as the final mixed effects model.
+
+### Mixed Effects Assumptions
+```{r}
+# Random Effect Normality
+random = ranef(mixed.1)$work_year[["(Intercept)"]]
+qqnorm(random,main="QQ Plot for Work Year in Mixed Model")
+qqline(random)
+
+# Residuals - Normality
+residuals = resid(mixed.1)
+qqnorm(residuals,main="QQ Plot for Residuals in Mixed Model")
+qqline(residuals(mixed.1))
+
+# Residuals - Constant Variance
+plot(mixed.1,xlab ="Fitted Values",ylab="Residuals",main="Residuals Plot of Mixed Model")
+```
+
+
+### Testing the significance of the Random and Fixed effects
+#### Random effect
+
+ Ho: Variance components are equal to 0
+ Ha: Variance components are greater than 0
+```{r}
+library(RLRsim)
+exactRLRT(mixed.1)
+```
+Since the p-value of 0.0201 is less than the significance level of 0.05, the random effect is significant/variance components statistically greater than O.
+
+#Confidence intervals
+```{r}
+confint(mixed.1)
+```
+
+#### Fixed Effect
+```{r}
+##Final fixed effects model
+library(car)
+car::Anova(model.1, test="F")
+
+```
+```{r}
+#Final mixed effects model
+library(car)
+car::Anova(mixed.1, test="F")
+```
