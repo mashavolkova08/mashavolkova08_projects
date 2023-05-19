@@ -1,0 +1,72 @@
+doctype html
+head
+  meta(charset='utf-8')
+  meta(name='viewport' content='width=device-width, initial-scale=1')
+  link(rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css')
+  script(src='https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js')
+  script(src='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js')
+  // <link rel="stylesheet" type="text/css" href="client/css/style.css">
+  title Welcome to Node.js
+  style(type='text/css').
+    .jumbotron { text-align: center; }
+    #error {
+    background-color: #FF9494;
+    color: darkred;
+    height: 30px;
+    visibility: hidden;
+    }
+.jumbotron(style='background: DarkSeaGreen !important')
+  h1 Login Page
+  br
+  p  Please enter your username and password. Both are case sensitive. 
+p#error
+  | Invalid Credentials: Please try again!
+  br
+form#loginForm
+  label(for='username') User:
+  br
+  input#username(type='text' name='username' required='')
+  br
+  label(for='password') Password:
+  br
+  input#password(type='text' name='password' required='')
+  br
+  br
+  input(type='submit' value='Log In')
+  br
+  br
+script.
+  document.getElementById("loginForm").addEventListener("submit", function(e){
+  e.preventDefault()
+  var user_input = document.getElementById("username").value
+  var password_input = document.getElementById("password").value
+  //console.log("user: ", user_input)
+  //console.log("password: ", password_input)
+  fetch('/loginValidation',{
+  method: "POST",
+  headers: {
+  "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+  user: user_input,
+  password: password_input
+  })})
+  .then(response => {
+  return response.text();
+  })
+  .then(data=>{
+  //console log data, parse JSON
+  var serverData = JSON.parse(data);
+  //console.log("server data: " , serverData['status'])
+  if (serverData['status'] == "success"){
+  //console.log("test success!")
+  window.location.href = "/schedule"
+  }
+  else{
+  document.getElementById("error").style.visibility = "visible";
+  document.getElementById("username").value = "";
+  document.getElementById("password").value = "";
+  }
+  })
+  .catch(error=> console.log("Request failed",error));
+  })
